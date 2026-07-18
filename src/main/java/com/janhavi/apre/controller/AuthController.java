@@ -10,7 +10,10 @@ import com.janhavi.apre.dto.LoginRequest;
 
 @RestController
 @RequestMapping("/api/auth")
-@CrossOrigin(origins = "http://localhost:5173")
+@CrossOrigin(origins = {
+        "http://localhost:5173",
+        "https://adaptive-payment-risk-engine-ui.vercel.app"
+})
 public class AuthController {
 
     private final UserService userService;
