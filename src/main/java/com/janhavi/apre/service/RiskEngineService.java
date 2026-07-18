@@ -5,13 +5,17 @@ import com.janhavi.apre.dto.PaymentResponse;
 import com.janhavi.apre.entity.PaymentTransaction;
 import com.janhavi.apre.enums.Decision;
 import com.janhavi.apre.enums.RiskCategory;
+import com.janhavi.apre.mapper.PaymentMapper;
 import com.janhavi.apre.repository.PaymentRepository;
 import com.janhavi.apre.rules.RiskResult;
 import com.janhavi.apre.rules.RiskRule;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.data.domain.Sort;
 
 import java.util.List;
-import java.util.UUID;
 
 @Service
 public class RiskEngineService {
@@ -19,8 +23,10 @@ public class RiskEngineService {
     private final List<RiskRule> rules;
     private final PaymentRepository paymentRepository;
 
-    public RiskEngineService(List<RiskRule> rules,
-                             PaymentRepository paymentRepository) {
+    public RiskEngineService(
+            List<RiskRule> rules,
+            PaymentRepository paymentRepository) {
+
         this.rules = rules;
         this.paymentRepository = paymentRepository;
     }
@@ -35,7 +41,6 @@ public class RiskEngineService {
 
         PaymentResponse response = new PaymentResponse();
 
-        response.setTransactionId(UUID.randomUUID());
         response.setRiskScore(result.getScore());
         response.setReasons(result.getReasons());
 
@@ -58,26 +63,45 @@ public class RiskEngineService {
 
             response.setRiskCategory(RiskCategory.CRITICAL);
             response.setDecision(Decision.DECLINED);
-
         }
 
-        // Save transaction to database
-        PaymentTransaction transaction = new PaymentTransaction();
+        // Convert DTO to Entity
+        PaymentTransaction transaction = PaymentMapper.toEntity(request, response);
 
-        transaction.setTransactionId(response.getTransactionId());
-        transaction.setAmount(request.getAmount());
-        transaction.setMerchantName(request.getMerchantName());
-        transaction.setMerchantCategory(request.getMerchantCategory());
-        transaction.setCountry(request.getCountry());
-        transaction.setPaymentMethod(request.getPaymentMethod());
-
-        transaction.setRiskScore(response.getRiskScore());
-        transaction.setRiskCategory(response.getRiskCategory());
-        transaction.setDecision(response.getDecision());
-        transaction.setReasons(String.join(", ", response.getReasons()));
-
+        // Save into PostgreSQL
         paymentRepository.save(transaction);
 
+        // Return generated transactionId to frontend
+        response.setTransactionId(transaction.getTransactionId());
+
         return response;
+    }
+
+    // Fetch paginated transactions
+    public Page<PaymentTransaction> getTransactions(
+            int page,
+            int size,
+            String sortBy,
+            String direction,
+            RiskCategory riskCategory,
+            Decision decision) {
+
+        Pageable pageable = PageRequest.of(
+                page,
+                size,
+                direction.equalsIgnoreCase("asc")
+                        ? Sort.by(sortBy).ascending()
+                        : Sort.by(sortBy).descending()
+        );
+
+        if (riskCategory != null) {
+            return paymentRepository.findByRiskCategory(riskCategory, pageable);
+        }
+
+        if (decision != null) {
+            return paymentRepository.findByDecision(decision, pageable);
+        }
+
+        return paymentRepository.findAll(pageable);
     }
 }
