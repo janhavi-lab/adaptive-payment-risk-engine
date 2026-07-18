@@ -21,7 +21,13 @@ public class CorsConfig {
                                 "http://localhost:5173",
                                 "https://adaptive-payment-risk-engine-ui.vercel.app"
                         )
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowedMethods(
+                                "GET",
+                                "POST",
+                                "PUT",
+                                "DELETE",
+                                "OPTIONS"
+                        )
                         .allowedHeaders("*");
 
             }
