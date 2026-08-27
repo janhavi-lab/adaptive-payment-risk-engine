@@ -31,3 +31,10 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Python ML Defense Lab
+ml-defense-lab/.venv/
+ml-defense-lab/__pycache__/
+ml-defense-lab/**/__pycache__/
+ml-defense-lab/*.pyc
+ml-defense-lab/**/*.pyc

@@ -9,12 +9,14 @@ import com.janhavi.apre.mapper.PaymentMapper;
 import com.janhavi.apre.repository.PaymentRepository;
 import com.janhavi.apre.rules.RiskResult;
 import com.janhavi.apre.rules.RiskRule;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
 import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -22,62 +24,256 @@ public class RiskEngineService {
 
     private final List<RiskRule> rules;
     private final PaymentRepository paymentRepository;
+    private final MlDefenseClient mlDefenseClient;
 
     public RiskEngineService(
             List<RiskRule> rules,
-            PaymentRepository paymentRepository) {
+            PaymentRepository paymentRepository,
+            MlDefenseClient mlDefenseClient) {
 
         this.rules = rules;
         this.paymentRepository = paymentRepository;
+        this.mlDefenseClient = mlDefenseClient;
     }
+
+    // =========================================================
+    // PAYMENT EVALUATION
+    // =========================================================
 
     public PaymentResponse evaluate(PaymentRequest request) {
 
-        RiskResult result = new RiskResult();
+        // =====================================================
+        // 1. EXISTING JAVA RULE ENGINE
+        // =====================================================
+
+        RiskResult ruleResult = new RiskResult();
 
         for (RiskRule rule : rules) {
-            rule.evaluate(request, result);
+
+            rule.evaluate(
+                    request,
+                    ruleResult
+            );
         }
 
-        PaymentResponse response = new PaymentResponse();
+        int ruleRiskScore =
+                ruleResult.getScore();
 
-        response.setRiskScore(result.getScore());
-        response.setReasons(result.getReasons());
 
-        if (result.getScore() < 20) {
+        // =====================================================
+        // 2. PYTHON ML DEFENSE
+        // =====================================================
 
-            response.setRiskCategory(RiskCategory.LOW);
-            response.setDecision(Decision.APPROVED);
+        MlDefenseClient.MlDefenseResult mlResult =
+                mlDefenseClient.evaluate(request);
 
-        } else if (result.getScore() < 50) {
 
-            response.setRiskCategory(RiskCategory.MEDIUM);
-            response.setDecision(Decision.APPROVED_WITH_MONITORING);
+        // =====================================================
+        // 3. GET ML RISK SCORE
+        // =====================================================
 
-        } else if (result.getScore() < 80) {
+        int mlRiskScore =
+                (int) Math.round(
+                        mlResult.getRiskScore()
+                );
 
-            response.setRiskCategory(RiskCategory.HIGH);
-            response.setDecision(Decision.MANUAL_REVIEW);
+
+        // =====================================================
+        // 4. COMBINE JAVA + ML RISK
+        // =====================================================
+
+        /*
+         * We use the stronger risk signal.
+         *
+         * Example:
+         *
+         * Java rules = 30
+         * ML defense = 93
+         *
+         * Final = 93
+         *
+         * This prevents a high ML risk from being hidden
+         * by a low Java-rule score.
+         */
+
+        int finalRiskScore =
+                Math.max(
+                        ruleRiskScore,
+                        mlRiskScore
+                );
+
+        // Keep score between 0 and 100
+
+        finalRiskScore =
+                Math.max(
+                        0,
+                        Math.min(
+                                100,
+                                finalRiskScore
+                        )
+                );
+
+
+        // =====================================================
+        // 5. DETERMINE RISK CATEGORY
+        // =====================================================
+
+        RiskCategory riskCategory;
+
+        if (finalRiskScore < 20) {
+
+            riskCategory =
+                    RiskCategory.LOW;
+
+        } else if (finalRiskScore < 50) {
+
+            riskCategory =
+                    RiskCategory.MEDIUM;
+
+        } else if (finalRiskScore < 80) {
+
+            riskCategory =
+                    RiskCategory.HIGH;
 
         } else {
 
-            response.setRiskCategory(RiskCategory.CRITICAL);
-            response.setDecision(Decision.DECLINED);
+            riskCategory =
+                    RiskCategory.CRITICAL;
         }
 
-        // Convert DTO to Entity
-        PaymentTransaction transaction = PaymentMapper.toEntity(request, response);
 
-        // Save into PostgreSQL
-        paymentRepository.save(transaction);
+        // =====================================================
+        // 6. DETERMINE JAVA DECISION
+        // =====================================================
 
-        // Return generated transactionId to frontend
-        response.setTransactionId(transaction.getTransactionId());
+        Decision decision;
+
+        if (riskCategory == RiskCategory.LOW) {
+
+            decision =
+                    Decision.APPROVED;
+
+        } else if (riskCategory == RiskCategory.MEDIUM) {
+
+            decision =
+                    Decision.APPROVED_WITH_MONITORING;
+
+        } else if (riskCategory == RiskCategory.HIGH) {
+
+            decision =
+                    Decision.MANUAL_REVIEW;
+
+        } else {
+
+            decision =
+                    Decision.DECLINED;
+        }
+
+
+        // =====================================================
+        // 7. COMBINE REASONS
+        // =====================================================
+
+        List<String> reasons =
+                new ArrayList<>(
+                        ruleResult.getReasons()
+                );
+
+
+        // ML explanation
+
+        if (mlResult.getReason() != null
+                && !mlResult.getReason().isBlank()) {
+
+            reasons.add(
+                    "ML Defense: "
+                            + mlResult.getReason()
+            );
+        }
+
+
+        // ML probability
+
+        reasons.add(
+                String.format(
+                        "ML fraud probability: %.2f%%",
+                        mlResult.getMlProbability() * 100
+                )
+        );
+
+
+        // ML risk level
+
+        reasons.add(
+                "ML risk level: "
+                        + mlResult.getRiskLevel()
+        );
+
+
+        // ML recommended action
+
+        reasons.add(
+                "ML recommended action: "
+                        + mlResult.getAction()
+        );
+
+
+        // =====================================================
+        // 8. BUILD RESPONSE
+        // =====================================================
+
+        PaymentResponse response =
+                new PaymentResponse();
+
+        response.setRiskScore(
+                finalRiskScore
+        );
+
+        response.setRiskCategory(
+                riskCategory
+        );
+
+        response.setDecision(
+                decision
+        );
+
+        response.setReasons(
+                reasons
+        );
+
+
+        // =====================================================
+        // 9. SAVE TRANSACTION
+        // =====================================================
+
+        PaymentTransaction transaction =
+                PaymentMapper.toEntity(
+                        request,
+                        response
+                );
+
+        paymentRepository.save(
+                transaction
+        );
+
+
+        // =====================================================
+        // 10. RETURN TRANSACTION ID
+        // =====================================================
+
+        response.setTransactionId(
+                transaction.getTransactionId()
+        );
+
 
         return response;
     }
 
-    // Fetch paginated transactions
+
+    // =========================================================
+    // FETCH TRANSACTIONS
+    // =========================================================
+
     public Page<PaymentTransaction> getTransactions(
             int page,
             int size,
@@ -86,22 +282,50 @@ public class RiskEngineService {
             RiskCategory riskCategory,
             Decision decision) {
 
-        Pageable pageable = PageRequest.of(
-                page,
-                size,
-                direction.equalsIgnoreCase("asc")
-                        ? Sort.by(sortBy).ascending()
-                        : Sort.by(sortBy).descending()
-        );
+        Pageable pageable =
+                PageRequest.of(
+                        page,
+                        size,
+                        direction.equalsIgnoreCase("asc")
+                                ? Sort.by(sortBy).ascending()
+                                : Sort.by(sortBy).descending()
+                );
+
+
+        // -----------------------------------------------------
+        // FILTER BY RISK CATEGORY
+        // -----------------------------------------------------
 
         if (riskCategory != null) {
-            return paymentRepository.findByRiskCategory(riskCategory, pageable);
+
+            return paymentRepository
+                    .findByRiskCategory(
+                            riskCategory,
+                            pageable
+                    );
         }
+
+
+        // -----------------------------------------------------
+        // FILTER BY DECISION
+        // -----------------------------------------------------
 
         if (decision != null) {
-            return paymentRepository.findByDecision(decision, pageable);
+
+            return paymentRepository
+                    .findByDecision(
+                            decision,
+                            pageable
+                    );
         }
 
-        return paymentRepository.findAll(pageable);
+
+        // -----------------------------------------------------
+        // RETURN ALL
+        // -----------------------------------------------------
+
+        return paymentRepository.findAll(
+                pageable
+        );
     }
 }
