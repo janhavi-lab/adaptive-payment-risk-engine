@@ -24,8 +24,7 @@ public class JwtService {
     private SecretKey getSigningKey() {
 
         return Keys.hmacShaKeyFor(
-                secretKey.getBytes(StandardCharsets.UTF_8)
-        );
+                secretKey.getBytes(StandardCharsets.UTF_8));
 
     }
 
@@ -38,13 +37,11 @@ public class JwtService {
                 .issuedAt(new Date())
 
                 .expiration(
-                        new Date(System.currentTimeMillis() + jwtExpiration)
-                )
+                        new Date(System.currentTimeMillis() + jwtExpiration))
 
                 .signWith(
                         getSigningKey(),
-                        SignatureAlgorithm.HS256
-                )
+                        SignatureAlgorithm.HS256)
 
                 .compact();
     }
@@ -70,8 +67,7 @@ public class JwtService {
 
     private <T> T extractClaim(
             String token,
-            Function<Claims, T> claimsResolver
-    ) {
+            Function<Claims, T> claimsResolver) {
 
         Claims claims = Jwts.parser()
 

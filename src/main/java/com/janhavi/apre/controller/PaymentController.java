@@ -3,13 +3,13 @@ package com.janhavi.apre.controller;
 import com.janhavi.apre.dto.PaymentRequest;
 import com.janhavi.apre.dto.PaymentResponse;
 import com.janhavi.apre.entity.PaymentTransaction;
+import com.janhavi.apre.enums.Decision;
+import com.janhavi.apre.enums.RiskCategory;
 import com.janhavi.apre.service.RiskEngineService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
-import org.springframework.web.bind.annotation.*;
-import com.janhavi.apre.enums.Decision;
-import com.janhavi.apre.enums.RiskCategory;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/payments")
@@ -21,6 +21,10 @@ public class PaymentController {
         this.riskEngineService = riskEngineService;
     }
 
+    // ============================================================
+    // Evaluate Payment
+    // Accessible by ADMIN and ANALYST
+    // ============================================================
     @PreAuthorize("hasAnyRole('ADMIN','ANALYST')")
     @PostMapping("/evaluate")
     public PaymentResponse evaluatePayment(
@@ -29,7 +33,11 @@ public class PaymentController {
         return riskEngineService.evaluate(request);
     }
 
-    @PreAuthorize("hasRole('ADMIN')")
+    // ============================================================
+    // Get Transactions
+    // Accessible by ADMIN and ANALYST
+    // ============================================================
+    @PreAuthorize("hasAnyRole('ADMIN','ANALYST')")
     @GetMapping
     public Page<PaymentTransaction> getTransactions(
 
@@ -54,5 +62,4 @@ public class PaymentController {
                 decision
         );
     }
-
 }

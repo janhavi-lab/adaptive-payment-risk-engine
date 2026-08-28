@@ -171,76 +171,42 @@ public class RiskEngineService {
 
 
         // =====================================================
-        // 7. COMBINE REASONS
+        // 7. SYNTHESIZE UNIFIED EXPLAINABLE SIGNALS
         // =====================================================
 
-        List<String> reasons =
-                new ArrayList<>(
-                        ruleResult.getReasons()
-                );
+        List<String> reasons = new ArrayList<>();
 
-
-        // ML explanation
-
-        if (mlResult.getReason() != null
-                && !mlResult.getReason().isBlank()) {
-
-            reasons.add(
-                    "ML Defense: "
-                            + mlResult.getReason()
-            );
+        for (String ruleReason : ruleResult.getReasons()) {
+            if (ruleReason != null && !ruleReason.isBlank()) {
+                reasons.add(ruleReason);
+            }
         }
 
+        if (mlResult != null && mlResult.getRiskScore() >= 40.0 && mlResult.getReason() != null && !mlResult.getReason().isBlank()) {
+            reasons.add("Behavioral anomaly: " + mlResult.getReason());
+        }
 
-        // ML probability
+        if (reasons.isEmpty()) {
+            reasons.add("Transaction attributes and behavioral patterns match verified baseline.");
+        }
 
-        reasons.add(
-                String.format(
-                        "ML fraud probability: %.2f%%",
-                        mlResult.getMlProbability() * 100
-                )
-        );
-
-
-        // ML risk level
-
-        reasons.add(
-                "ML risk level: "
-                        + mlResult.getRiskLevel()
-        );
-
-
-        // ML recommended action
-
-        reasons.add(
-                "ML recommended action: "
-                        + mlResult.getAction()
-        );
-
+        String recommendedAction = switch (decision) {
+            case APPROVED -> "APPROVE_TRANSACTION";
+            case APPROVED_WITH_MONITORING -> "APPROVE_WITH_MONITORING";
+            case MANUAL_REVIEW -> "MANUAL_REVIEW";
+            case DECLINED -> "BLOCK_TRANSACTION";
+        };
 
         // =====================================================
-        // 8. BUILD RESPONSE
+        // 8. BUILD RESPONSE (ADAPTIVE RISK ORCHESTRATOR)
         // =====================================================
 
-        PaymentResponse response =
-                new PaymentResponse();
-
-        response.setRiskScore(
-                finalRiskScore
-        );
-
-        response.setRiskCategory(
-                riskCategory
-        );
-
-        response.setDecision(
-                decision
-        );
-
-        response.setReasons(
-                reasons
-        );
-
+        PaymentResponse response = new PaymentResponse();
+        response.setRiskScore(finalRiskScore);
+        response.setRiskCategory(riskCategory);
+        response.setDecision(decision);
+        response.setRecommendedAction(recommendedAction);
+        response.setReasons(reasons);
 
         // =====================================================
         // 9. SAVE TRANSACTION
@@ -256,7 +222,6 @@ public class RiskEngineService {
                 transaction
         );
 
-
         // =====================================================
         // 10. RETURN TRANSACTION ID
         // =====================================================
@@ -264,7 +229,6 @@ public class RiskEngineService {
         response.setTransactionId(
                 transaction.getTransactionId()
         );
-
 
         return response;
     }

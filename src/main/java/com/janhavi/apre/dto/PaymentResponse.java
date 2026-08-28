@@ -16,6 +16,8 @@ public class PaymentResponse {
 
     private Decision decision;
 
+    private String recommendedAction;
+
     private List<String> reasons;
 
     public PaymentResponse() {
@@ -53,6 +55,14 @@ public class PaymentResponse {
         this.decision = decision;
     }
 
+    public String getRecommendedAction() {
+        return recommendedAction;
+    }
+
+    public void setRecommendedAction(String recommendedAction) {
+        this.recommendedAction = recommendedAction;
+    }
+
     public List<String> getReasons() {
         return reasons;
     }
@@ -60,4 +70,4 @@ public class PaymentResponse {
     public void setReasons(List<String> reasons) {
         this.reasons = reasons;
     }
-}
+}

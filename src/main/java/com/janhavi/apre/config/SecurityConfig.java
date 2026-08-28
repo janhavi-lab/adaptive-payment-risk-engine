@@ -1,23 +1,30 @@
 package com.janhavi.apre.config;
 
 import com.janhavi.apre.security.JwtAuthenticationFilter;
+
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+
 import java.util.List;
 
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
 
 @Configuration
 @EnableMethodSecurity
@@ -29,10 +36,12 @@ public class SecurityConfig {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
+
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
@@ -41,6 +50,8 @@ public class SecurityConfig {
 
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",
+                "http://127.0.0.1:5173",
+                "http://localhost:3000",
                 "https://adaptive-payment-risk-engine-ui.vercel.app"
         ));
 
@@ -64,29 +75,45 @@ public class SecurityConfig {
         return source;
     }
 
+
     @Bean
     public AuthenticationManager authenticationManager(
             AuthenticationConfiguration configuration) throws Exception {
+
         return configuration.getAuthenticationManager();
     }
 
+
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http) throws Exception {
 
         http
                 .cors(Customizer.withDefaults())
+
                 .csrf(csrf -> csrf.disable())
 
                 .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        session.sessionCreationPolicy(
+                                SessionCreationPolicy.STATELESS
+                        )
+                )
 
                 .authorizeHttpRequests(auth -> auth
+
+                        // Login and registration must be public
                         .requestMatchers(
-                                "/api/auth/**",
+                                "/api/auth/**"
+                        ).permitAll()
+
+                        // Swagger must be public
+                        .requestMatchers(
                                 "/swagger-ui/**",
                                 "/v3/api-docs/**",
                                 "/swagger-ui.html"
                         ).permitAll()
+
+                        // Everything else requires JWT
                         .anyRequest().authenticated()
                 )
 
@@ -95,7 +122,8 @@ public class SecurityConfig {
                         UsernamePasswordAuthenticationFilter.class
                 )
 
-                .httpBasic(Customizer.withDefaults());
+                // Disable browser username/password popup
+                .httpBasic(httpBasic -> httpBasic.disable());
 
         return http.build();
     }
