@@ -34,14 +34,16 @@ public class UserService {
     // ===========================
     public String register(RegisterRequest request) {
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+
+        if (userRepository.existsByEmail(normalizedEmail)) {
             throw new DuplicateUserException("Email already registered");
         }
 
         User user = new User();
 
-        user.setName(request.getName());
-        user.setEmail(request.getEmail());
+        user.setName(request.getName() != null ? request.getName().trim() : "");
+        user.setEmail(normalizedEmail);
 
         user.setPassword(passwordEncoder.encode(request.getPassword()));
 
@@ -61,7 +63,9 @@ public class UserService {
     // ===========================
     public AuthResponse login(LoginRequest request) {
 
-        User user = userRepository.findByEmail(request.getEmail())
+        String normalizedEmail = request.getEmail() != null ? request.getEmail().trim().toLowerCase() : "";
+
+        User user = userRepository.findByEmail(normalizedEmail)
                 .orElseThrow(() ->
                         new RuntimeException("Invalid email or password"));
 
