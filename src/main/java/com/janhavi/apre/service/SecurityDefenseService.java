@@ -134,11 +134,9 @@ public class SecurityDefenseService {
                 .filter(t -> "FEEDBACK IDENTIFIED".equalsIgnoreCase(t.getFeedbackCandidateStatus()) || t.getMissedCount() > 0)
                 .count();
 
-        double avgDetectionRate;
+        double avgDetectionRate = 0.0;
         if (!tests.isEmpty()) {
             avgDetectionRate = tests.stream().mapToDouble(SecurityTest::getDetectionRate).average().orElse(0.0);
-        } else {
-            avgDetectionRate = 94.2; // Default starting benchmark if 0 tests run yet
         }
 
         Map<String, Object> metrics = new LinkedHashMap<>();

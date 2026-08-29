@@ -391,6 +391,7 @@ def simulate_attack(req: AttackSimulationRequest):
         "feedback_status": feedback_status,
         "feedback_candidate_count": missed_count,
         "adaptive_insight": adaptive_insight,
+        "next_defense_focus": attack_type,
         "sample_transactions": evaluated_txs[:10],
         "missed_samples": missed_samples,
         "timestamp": datetime.now().isoformat()
