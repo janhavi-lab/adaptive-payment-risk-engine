@@ -129,14 +129,15 @@ public class SecurityDefenseService {
         List<SecurityTest> tests = securityTestRepository.findAll();
         long totalDefenseTests = tests.size();
         long attacksSimulated = tests.stream().mapToLong(SecurityTest::getTransactionsGenerated).sum();
+        long totalDetected = tests.stream().mapToLong(SecurityTest::getDetectedCount).sum();
         long totalMissed = tests.stream().mapToLong(SecurityTest::getMissedCount).sum();
         long feedbackIdentifiedCount = tests.stream()
                 .filter(t -> "FEEDBACK IDENTIFIED".equalsIgnoreCase(t.getFeedbackCandidateStatus()) || t.getMissedCount() > 0)
                 .count();
 
-        double avgDetectionRate = 0.0;
-        if (!tests.isEmpty()) {
-            avgDetectionRate = tests.stream().mapToDouble(SecurityTest::getDetectionRate).average().orElse(0.0);
+        double overallDetectionRate = 0.0;
+        if (attacksSimulated > 0) {
+            overallDetectionRate = Math.round(((double) totalDetected / attacksSimulated) * 1000.0) / 10.0;
         }
 
         Map<String, Object> metrics = new LinkedHashMap<>();
@@ -146,7 +147,7 @@ public class SecurityDefenseService {
         metrics.put("approved_payments", approvedPayments);
         metrics.put("total_defense_tests", totalDefenseTests);
         metrics.put("attacks_simulated", attacksSimulated);
-        metrics.put("overall_detection_rate", Math.round(avgDetectionRate * 10.0) / 10.0);
+        metrics.put("overall_detection_rate", overallDetectionRate);
         metrics.put("missed_patterns_count", totalMissed);
         metrics.put("feedback_identified_tests", feedbackIdentifiedCount);
         metrics.put("active_attack_scenarios", 8);
