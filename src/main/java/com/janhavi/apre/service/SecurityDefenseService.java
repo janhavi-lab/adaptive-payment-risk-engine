@@ -80,6 +80,7 @@ public class SecurityDefenseService {
         simResult.put("db_id", savedTest.getId());
         simResult.put("feedback_candidate_status", test.getFeedbackCandidateStatus());
         simResult.put("adaptive_insight", test.getAdaptiveInsight());
+        simResult.put("next_defense_focus", simResult.getOrDefault("next_defense_focus", test.getAttackType()));
 
         return simResult;
     }

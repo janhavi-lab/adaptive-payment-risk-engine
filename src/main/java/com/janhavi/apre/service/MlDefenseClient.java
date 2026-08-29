@@ -29,11 +29,13 @@ public class MlDefenseClient {
 
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
+    private final AdversarialSimulationFallback adversarialSimulationFallback;
 
-    public MlDefenseClient() {
+    public MlDefenseClient(AdversarialSimulationFallback adversarialSimulationFallback) {
+        this.adversarialSimulationFallback = adversarialSimulationFallback;
         this.httpClient =
                 HttpClient.newBuilder()
-                        .connectTimeout(Duration.ofSeconds(3))
+                        .connectTimeout(Duration.ofSeconds(5))
                         .build();
 
         this.objectMapper = new ObjectMapper();
@@ -149,10 +151,11 @@ public class MlDefenseClient {
     // =========================================================
 
     public Map<String, Object> simulateAttack(String attackType, int batchSize) {
+        int effectiveBatchSize = batchSize > 0 ? batchSize : 50;
         try {
             Map<String, Object> body = new HashMap<>();
             body.put("attack_type", attackType != null && !attackType.isBlank() ? attackType : "AUTO");
-            body.put("batch_size", batchSize > 0 ? batchSize : 50);
+            body.put("batch_size", effectiveBatchSize);
 
             String json = objectMapper.writeValueAsString(body);
             String url = getBaseUrl() + "/attack/simulate";
@@ -160,7 +163,7 @@ public class MlDefenseClient {
             HttpRequest httpRequest =
                     HttpRequest.newBuilder()
                             .uri(URI.create(url))
-                            .timeout(Duration.ofSeconds(12))
+                            .timeout(Duration.ofSeconds(15))
                             .header("Content-Type", "application/json")
                             .header("Accept", "application/json")
                             .POST(HttpRequest.BodyPublishers.ofString(json))
@@ -170,18 +173,23 @@ public class MlDefenseClient {
                     httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
 
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                return objectMapper.readValue(response.body(), Map.class);
+                Map<String, Object> mlResult = objectMapper.readValue(response.body(), Map.class);
+                if (mlResult != null) {
+                    mlResult.putIfAbsent("simulation_source", "ML_DEFENSE_LAB");
+                    return mlResult;
+                }
             }
 
-            log.error("Python attack simulation returned non-200 status: {}", response.statusCode());
-            throw new IllegalStateException("Defense simulation is temporarily unavailable.");
+            log.warn("Python attack simulation returned status: {}. Executing controlled orchestrator fallback.", response.statusCode());
+            return adversarialSimulationFallback.simulateAttack(attackType, effectiveBatchSize);
 
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            throw new IllegalStateException("Defense simulation is temporarily unavailable.");
+            log.warn("Attack simulation interrupted. Using orchestrator fallback.");
+            return adversarialSimulationFallback.simulateAttack(attackType, effectiveBatchSize);
         } catch (Exception e) {
-            log.error("Failed to connect to Python ML attack simulator: {}", e.getMessage());
-            throw new IllegalStateException("Defense simulation is temporarily unavailable.");
+            log.warn("Remote ML simulation unavailable ({}). Executing controlled orchestrator fallback simulation.", e.getMessage());
+            return adversarialSimulationFallback.simulateAttack(attackType, effectiveBatchSize);
         }
     }
 

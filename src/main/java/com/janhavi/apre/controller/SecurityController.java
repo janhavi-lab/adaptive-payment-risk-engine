@@ -10,9 +10,14 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestController
 @RequestMapping("/api/security")
 public class SecurityController {
+
+    private static final Logger log = LoggerFactory.getLogger(SecurityController.class);
 
     private final SecurityDefenseService securityDefenseService;
 
@@ -50,9 +55,10 @@ public class SecurityController {
             Map<String, Object> result = securityDefenseService.triggerAttack(attackType, batchSize);
             return ResponseEntity.ok(result);
         } catch (Exception e) {
+            log.error("Security attack execution error for scenario '{}': {}", attackType, e.getMessage(), e);
             Map<String, Object> errorBody = new java.util.LinkedHashMap<>();
             errorBody.put("error", "Defense simulation is temporarily unavailable.");
-            errorBody.put("message", "Defense simulation is temporarily unavailable.");
+            errorBody.put("message", "Defense simulation is temporarily unavailable. Please retry.");
             return ResponseEntity.status(503).body(errorBody);
         }
     }
